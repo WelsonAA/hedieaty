@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-
+import 'local_db.dart';
 class HomePage extends StatelessWidget {
+
   final List<Map<String, dynamic>> friends = [
     {'name': 'Alice', 'profilePic': 'assets/alice.jpg', 'upcomingEvents': 1},
     {'name': 'Bob', 'profilePic': 'assets/bob.jpg', 'upcomingEvents': 0},
