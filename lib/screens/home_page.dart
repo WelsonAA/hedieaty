@@ -4,7 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hedieaty/services/firebase_auth_service.dart';
 import 'start_page.dart'; // Import the StartPage
 import '../local_db.dart';
-
+import 'create_event_page.dart';
+import 'user_events_page.dart';
 class HomePage extends StatefulWidget {
   @override
   _HomePageState createState() => _HomePageState();
@@ -55,7 +56,8 @@ class _HomePageState extends State<HomePage> {
       await FirebaseAuth.instance.signOut(); // Sign out from Firebase
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => StartPage()), // Navigate to StartPage
+        MaterialPageRoute(builder: (context) => StartPage()),
+        // Navigate to StartPage
             (route) => false, // Remove all previous routes
       );
     } catch (e) {
@@ -73,7 +75,6 @@ class _HomePageState extends State<HomePage> {
   ];
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> filteredFriends = [];
-
 
 
   void _filterFriends(String query) {
@@ -95,6 +96,28 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.logout),
             tooltip: 'Sign Out',
             onPressed: _signOut,
+          ),
+          IconButton(
+            icon: Icon(Icons.event),
+            tooltip: 'View My Events',
+            onPressed: () async {
+              Map<String, dynamic>? identifiers = await getUserIdentifiers();
+              if (identifiers != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UserEventsPage(
+                      userId: identifiers['loggedInUserId'], // SQLite User ID
+                      firebaseUserUid: identifiers['firebaseUserUid'], // Firebase UID
+                    ),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Unable to fetch user details. Please try again.')),
+                );
+              }
+            },
           ),
           IconButton(
             icon: Icon(Icons.add),
@@ -126,7 +149,8 @@ class _HomePageState extends State<HomePage> {
               itemCount: filteredFriends.length,
               itemBuilder: (context, index) {
                 return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                  margin: const EdgeInsets.symmetric(
+                      vertical: 5, horizontal: 10),
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundImage:
@@ -156,26 +180,87 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _navigateToCreateEventOrGiftList,
+        onPressed: () async {
+          Map<String, dynamic>? identifiers = await getUserIdentifiers();
+          if (identifiers != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    CreateEventPage(
+                      userId: identifiers['loggedInUserId'], // SQLite User ID
+                      firebaseUserId: identifiers['firebaseUserUid'], // Firebase UID
+                    ),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(
+                  'Unable to fetch user details. Please try again.')),
+            );
+          }
+        },
         label: Text('Create Event/List'),
         icon: Icon(Icons.create),
+
       ),
+
+
+
     );
   }
 
-  // Navigate to friend's gift lists
-  void _navigateToGiftLists(Map<String, dynamic> friend) {
-    // Replace with your GiftListPage navigation logic
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: Text("${friend['name']}'s Gift Lists")),
-          body: Center(child: Text('Gift list for ${friend['name']}')),
-        ),
-      ),
-    );
+  Future<Map<String, dynamic>?> getUserIdentifiers() async {
+    User? firebaseUser = FirebaseAuth.instance.currentUser;
+
+    if (firebaseUser != null) {
+      String firebaseUserUid = firebaseUser.uid;
+      String? email = firebaseUser.email;
+
+      if (email != null) {
+        int? loggedInUserId = await getLoggedInUserId(email);
+
+        if (loggedInUserId != null) {
+          return {
+            'firebaseUserUid': firebaseUserUid,
+            'loggedInUserId': loggedInUserId,
+          };
+        }
+      }
+    }
+    return null; // Return null if user identifiers are not available
   }
+
+
+  Future<int?> getLoggedInUserId(String email) async {
+    final db = await local_db().getInstance();
+    List<Map<String, dynamic>> result = await db!.query(
+      'Accounts',
+      columns: ['id'], // Fetch only the ID
+      where: 'email = ?',
+      whereArgs: [email],
+    );
+
+    if (result.isNotEmpty) {
+      return result.first['id'];
+    }
+    return null; // User not found
+  }
+
+
+// Navigate to friend's gift lists
+void _navigateToGiftLists(Map<String, dynamic> friend) {
+  // Replace with your GiftListPage navigation logic
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => Scaffold(
+        appBar: AppBar(title: Text("${friend['name']}'s Gift Lists")),
+        body: Center(child: Text('Gift list for ${friend['name']}')),
+      ),
+    ),
+  );
+}
 
   // Navigate to Create Event or Gift List Page
   void _navigateToCreateEventOrGiftList() {
