@@ -1,10 +1,10 @@
-import 'local_db.dart';
+import '../local_db.dart';
 
 class User {
   int? id;
   String name;
   String email;
-  String passwordHashed;
+  String passwordHashed;  // Not recommended to store passwords, consider storing only necessary info
 
   User({
     this.id,
@@ -16,7 +16,7 @@ class User {
   // Convert a User object into a map for inserting into the database
   Map<String, dynamic> toMap() {
     return {
-      'id': id,  // can be null if we're inserting a new user
+      'id': id,
       'name': name,
       'email': email,
       'passwordHashed': passwordHashed,
@@ -50,20 +50,6 @@ class User {
     }
   }
 
-  // Fetch a user by ID
-  static Future<User?> getById(int userId) async {
-    final db = await local_db().getInstance();
-    var result = await db!.query(
-      'Users',
-      where: 'id = ?',
-      whereArgs: [userId],
-    );
-    if (result.isNotEmpty) {
-      return User.fromMap(result.first);
-    }
-    return null;
-  }
-
   // Fetch a user by email
   static Future<User?> getByEmail(String email) async {
     final db = await local_db().getInstance();
@@ -76,22 +62,5 @@ class User {
       return User.fromMap(result.first);
     }
     return null;
-  }
-
-  // Delete a user from the database
-  Future<int> delete() async {
-    final db = await local_db().getInstance();
-    return await db!.delete(
-      'Users',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  // Fetch all users (for testing purposes)
-  static Future<List<User>> getAllUsers() async {
-    final db = await local_db().getInstance();
-    var result = await db!.query('Users');
-    return result.map((userMap) => User.fromMap(userMap)).toList();
   }
 }

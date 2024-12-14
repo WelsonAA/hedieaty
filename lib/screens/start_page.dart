@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
-import 'local_db.dart';
+import '../local_db.dart';
 class StartPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

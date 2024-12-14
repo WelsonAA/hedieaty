@@ -1,14 +1,21 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
-import 'home_page.dart';
-import 'start_page.dart';
-
+import 'package:hedieaty/screens/login_page.dart';
+import 'package:hedieaty/local_db.dart';
+import 'screens/home_page.dart';
+import 'screens/start_page.dart';
+import '/services/firebase_options.dart';
 // Import the necessary package for web SQLite support
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
-
-void main() {
+import 'local_db.dart';
+void main() async{
   // Initialize the database factory for web
-  databaseFactory = databaseFactoryFfiWeb;
+  //await local_db().getInstance();
+  print("Helloo");
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);  // Initialize Firebase
+  await local_db().resetting(); // Reset the database
+  await local_db().getInstance();
 
   // Run the Flutter app
   runApp(HedieatyApp());
@@ -23,8 +30,13 @@ class HedieatyApp extends StatelessWidget {
         primarySwatch: Colors.purple, // Customize theme as needed
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: StartPage(), // Set HomePage as the initial route
-      debugShowCheckedModeBanner: false, // Remove debug banner
+      initialRoute: '/start', // Set the initial route to '/start'
+      routes:{
+        '/start': (context) => StartPage(),
+        '/home': (context) => HomePage(),
+        '/login': (context) => LoginPage(),
+      },
+      debugShowCheckedModeBanner: true, // Remove debug banner
     );
   }
 }
