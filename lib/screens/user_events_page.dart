@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../local_db.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'add_gifts_page.dart';
+import 'event_details_page.dart';
+import 'edit_event_page.dart';
 
 class UserEventsPage extends StatefulWidget {
   final int userId; // Local SQLite user ID
@@ -68,6 +71,81 @@ class _UserEventsPageState extends State<UserEventsPage> {
     }
   }
 
+  Future<void> _editEvent(Map<String, dynamic> event) async {
+    final int? localEventId = event['source'] == 'SQLite' ? event['id'] as int : null;
+    final String? firebaseEventId =
+    event['source'] == 'Firestore' ? event['id'] as String : null;
+
+    bool? updated = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditEventPage(
+          localEventId: localEventId,
+          firebaseEventId: firebaseEventId,
+          event: event,
+        ),
+      ),
+    );
+
+    if (updated == true) {
+      _fetchUserEvents(); // Refresh the events list
+    }
+  }
+
+  Future<void> _deleteEvent(Map<String, dynamic> event) async {
+    final confirm = await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Delete Event'),
+          content: Text('Are you sure you want to delete this event?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      try {
+        // Delete from SQLite
+        if (event['source'] == 'SQLite') {
+          final db = await local_db().getInstance();
+          await db!.delete(
+            'Events',
+            where: 'id = ?',
+            whereArgs: [event['id']],
+          );
+        }
+
+        // Delete from Firestore
+        if (event['source'] == 'Firestore') {
+          await FirebaseFirestore.instance
+              .collection('events')
+              .doc(event['id'])
+              .delete();
+        }
+
+        _fetchUserEvents(); // Refresh the events list
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Event deleted successfully.')),
+        );
+      } catch (e) {
+        print("Error deleting event: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete event. Please try again.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,17 +161,32 @@ class _UserEventsPageState extends State<UserEventsPage> {
         itemBuilder: (context, index) {
           final event = userEvents[index];
           return Card(
-            margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+            margin: const EdgeInsets.symmetric(
+                vertical: 5, horizontal: 10),
             child: ListTile(
               title: Text(event['name']),
               subtitle: Text('Date: ${event['date']}'),
-              trailing: Text(
-                event['source'],
-                style: TextStyle(
-                  color: event['source'] == 'SQLite' ? Colors.blue : Colors.green,
-                  fontSize: 12,
-                ),
-              ), // Show source (SQLite or Firestore)
+              trailing: PopupMenuButton<String>(
+                onSelected: (String choice) {
+                  if (choice == 'Edit') {
+                    _editEvent(event);
+                  } else if (choice == 'Delete') {
+                    _deleteEvent(event);
+                  }
+                },
+                itemBuilder: (BuildContext context) {
+                  return [
+                    PopupMenuItem<String>(
+                      value: 'Edit',
+                      child: Text('Edit'),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'Delete',
+                      child: Text('Delete'),
+                    ),
+                  ];
+                },
+              ),
               onTap: () {
                 _navigateToEventDetails(event);
               },
@@ -105,28 +198,18 @@ class _UserEventsPageState extends State<UserEventsPage> {
   }
 
   void _navigateToEventDetails(Map<String, dynamic> event) {
+    final int? localEventId =
+    event['source'] == 'SQLite' ? event['id'] as int : null;
+    final String? firebaseEventId =
+    event['source'] == 'Firestore' ? event['id'] as String : null;
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: Text(event['name'])),
-          body: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Event Name: ${event['name']}', style: TextStyle(fontSize: 18)),
-                SizedBox(height: 10),
-                Text('Date: ${event['date']}', style: TextStyle(fontSize: 16)),
-                SizedBox(height: 10),
-                Text('Location: ${event['location'] ?? 'No location provided'}',
-                    style: TextStyle(fontSize: 16)),
-                SizedBox(height: 10),
-                Text('Description: ${event['description'] ?? 'No description provided'}',
-                    style: TextStyle(fontSize: 16)),
-              ],
-            ),
-          ),
+        builder: (context) => EventDetailsPage(
+          event: event,
+          localEventId: localEventId,
+          firebaseEventId: firebaseEventId,
         ),
       ),
     );
