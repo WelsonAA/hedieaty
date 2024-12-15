@@ -85,13 +85,123 @@ class _HomePageState extends State<HomePage> {
           .toList();
     });
   }
+  void _viewFriendRequests() async {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    QuerySnapshot requestsSnapshot = await FirebaseFirestore.instance
+        .collection('notifications')
+        .where('receiverId', isEqualTo: currentUser.uid)
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    List<QueryDocumentSnapshot> requests = requestsSnapshot.docs;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Friend Requests'),
+          content: requests.isEmpty
+              ? Text('No friend requests.')
+              : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: requests.map((request) {
+              String senderId = request['senderId'];
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(senderId)
+                    .get(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return CircularProgressIndicator();
+
+                  String senderName = snapshot.data!['name'];
+
+                  return ListTile(
+                    title: Text(senderName),
+                    subtitle: Text('Wants to be your friend'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.check, color: Colors.green),
+                          onPressed: () => _respondToFriendRequest(
+                              request.id, 'accepted', senderId),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close, color: Colors.red),
+                          onPressed: () => _respondToFriendRequest(
+                              request.id, 'rejected', senderId),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _respondToFriendRequest(
+      String requestId, String response, String senderId) async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) throw "User not logged in.";
+
+      // Update the friend request in Firestore
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(requestId)
+          .update({'status': response});
+
+      if (response == 'accepted') {
+        // Add each other as friends in Firestore
+        await FirebaseFirestore.instance.collection('friends').add({
+          'user1': currentUser.uid,
+          'user2': senderId,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Friend request accepted.")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Friend request rejected.")),
+        );
+      }
+
+      Navigator.of(context).pop(); // Close the dialog
+    } catch (e) {
+      print("Error responding to friend request: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to respond to request.")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Hedieaty - Friends List'),
-        actions: [
+        actions: [IconButton(
+          icon: Icon(Icons.notifications),
+          tooltip: 'Friend Requests',
+          onPressed: _viewFriendRequests,
+        ),
           IconButton(
             icon: Icon(Icons.logout),
             tooltip: 'Sign Out',
@@ -249,18 +359,18 @@ class _HomePageState extends State<HomePage> {
 
 
 // Navigate to friend's gift lists
-void _navigateToGiftLists(Map<String, dynamic> friend) {
-  // Replace with your GiftListPage navigation logic
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => Scaffold(
-        appBar: AppBar(title: Text("${friend['name']}'s Gift Lists")),
-        body: Center(child: Text('Gift list for ${friend['name']}')),
+  void _navigateToGiftLists(Map<String, dynamic> friend) {
+    // Replace with your GiftListPage navigation logic
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: Text("${friend['name']}'s Gift Lists")),
+          body: Center(child: Text('Gift list for ${friend['name']}')),
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // Navigate to Create Event or Gift List Page
   void _navigateToCreateEventOrGiftList() {
@@ -281,22 +391,12 @@ void _navigateToGiftLists(Map<String, dynamic> friend) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        TextEditingController friendNameController = TextEditingController();
-        TextEditingController friendPhoneController = TextEditingController();
+        TextEditingController friendEmailController = TextEditingController();
         return AlertDialog(
-          title: Text('Add Friend'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: friendNameController,
-                decoration: InputDecoration(labelText: 'Friend\'s Name'),
-              ),
-              TextField(
-                controller: friendPhoneController,
-                decoration: InputDecoration(labelText: 'Phone Number'),
-              ),
-            ],
+          title: Text('Send Friend Request'),
+          content: TextField(
+            controller: friendEmailController,
+            decoration: InputDecoration(labelText: 'Friend\'s Email'),
           ),
           actions: [
             TextButton(
@@ -306,21 +406,56 @@ void _navigateToGiftLists(Map<String, dynamic> friend) {
               child: Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  friends.add({
-                    'name': friendNameController.text,
-                    'profilePic': 'assets/default.jpg',
-                    'upcomingEvents': 0,
-                  });
-                });
+              onPressed: () async {
+                String friendEmail = friendEmailController.text.trim();
+                await _sendFriendRequest(friendEmail);
                 Navigator.of(context).pop();
               },
-              child: Text('Add Friend'),
+              child: Text('Send Request'),
             ),
           ],
         );
       },
     );
   }
+
+  Future<void> _sendFriendRequest(String friendEmail) async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) throw "User not logged in.";
+
+      // Find the receiver's UID based on their email
+      QuerySnapshot userSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: friendEmail)
+          .get();
+
+      if (userSnapshot.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("User with this email not found.")),
+        );
+        return;
+      }
+
+      String receiverUid = userSnapshot.docs.first.id;
+
+      // Add the friend request to the notifications collection
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'senderId': currentUser.uid,
+        'receiverId': receiverUid,
+        'status': 'pending',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Friend request sent.")),
+      );
+    } catch (e) {
+      print("Error sending friend request: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to send friend request.")),
+      );
+    }
+  }
+
 }
