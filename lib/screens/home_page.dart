@@ -13,12 +13,17 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   String userName = "Loading..."; // Default value while fetching data
+  String searchEmail = ''; // Store the email entered for searching
+  List<Map<String, dynamic>> friends = []; // List to store friends
+  bool isLoading = true;
+  bool isSearching = false; // Flag for searching state
+  Map<String, dynamic>? searchResult; // Store search result for user to add
 
   @override
   void initState() {
     super.initState();
     _fetchUserName(); // Fetch the logged-in user's name
-    filteredFriends = friends; // Initially, show all friends
+    _fetchFriends(); // Fetch friends from Firestore
   }
 
   // Fetch the logged-in user's name from Firestore
@@ -49,6 +54,113 @@ class _HomePageState extends State<HomePage> {
       });
     }
   }
+// Fetch friends list from Firestore
+  Future<void> _fetchFriends() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+
+        if (userDoc.exists) {
+          List friendsList = userDoc['friends'] ?? [];
+          setState(() {
+            friends = friendsList.map((friend) => {'name': friend['name'], 'email': friend['email']}).toList();
+            isLoading = false; // Stop the loading indicator
+          });
+        }
+      }
+    } catch (e) {
+      print("Error fetching friends: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  // Search for a user by email
+  Future<void> _searchUserByEmail() async {
+    setState(() {
+      isSearching = true;
+      searchResult = null;
+    });
+
+    try {
+      // Query Firestore for a user by email
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: searchEmail)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        setState(() {
+          searchResult = querySnapshot.docs.first.data() as Map<String, dynamic>;
+        });
+      } else {
+        setState(() {
+          searchResult = null;
+        });
+      }
+    } catch (e) {
+      print("Error searching for user: $e");
+      setState(() {
+        searchResult = null;
+      });
+    } finally {
+      setState(() {
+        isSearching = false;
+      });
+    }
+  }
+
+  // Add friend logic
+  Future<void> _addFriend() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null && searchResult != null) {
+        // Update the current user's friends list
+        DocumentReference currentUserDocRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid);
+
+        // Add the found user to the current user's friends list
+        await currentUserDocRef.update({
+          'friends': FieldValue.arrayUnion([{
+            'id': searchResult!['id'],
+            'name': searchResult!['name'],
+            'email': searchResult!['email']
+          }])
+        });
+
+        // Update the found user's friends list
+        DocumentReference friendDocRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(searchResult!['id']);
+
+        await friendDocRef.update({
+          'friends': FieldValue.arrayUnion([{
+            'id': currentUser.uid,
+            'name': userName,
+            'email': currentUser.email
+          }])
+        });
+
+        // Refresh the friends list
+        _fetchFriends();
+
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Friend added successfully!'),
+        ));
+      }
+    } catch (e) {
+      print("Error adding friend: $e");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error adding friend, please try again.'),
+      ));
+    }
+  }
 
   // Handle sign-out
   Future<void> _signOut() async {
@@ -68,11 +180,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  final List<Map<String, dynamic>> friends = [
-    {'name': 'Alice', 'profilePic': 'assets/alice.jpg', 'upcomingEvents': 1},
-    {'name': 'Bob', 'profilePic': 'assets/bob.jpg', 'upcomingEvents': 0},
-    // Add more friends as needed
-  ];
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> filteredFriends = [];
 
@@ -85,123 +192,13 @@ class _HomePageState extends State<HomePage> {
           .toList();
     });
   }
-  void _viewFriendRequests() async {
-    User? currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    QuerySnapshot requestsSnapshot = await FirebaseFirestore.instance
-        .collection('notifications')
-        .where('receiverId', isEqualTo: currentUser.uid)
-        .where('status', isEqualTo: 'pending')
-        .get();
-
-    List<QueryDocumentSnapshot> requests = requestsSnapshot.docs;
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Friend Requests'),
-          content: requests.isEmpty
-              ? Text('No friend requests.')
-              : Column(
-            mainAxisSize: MainAxisSize.min,
-            children: requests.map((request) {
-              String senderId = request['senderId'];
-              return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(senderId)
-                    .get(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return CircularProgressIndicator();
-
-                  String senderName = snapshot.data!['name'];
-
-                  return ListTile(
-                    title: Text(senderName),
-                    subtitle: Text('Wants to be your friend'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.check, color: Colors.green),
-                          onPressed: () => _respondToFriendRequest(
-                              request.id, 'accepted', senderId),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.close, color: Colors.red),
-                          onPressed: () => _respondToFriendRequest(
-                              request.id, 'rejected', senderId),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            }).toList(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _respondToFriendRequest(
-      String requestId, String response, String senderId) async {
-    try {
-      User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) throw "User not logged in.";
-
-      // Update the friend request in Firestore
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(requestId)
-          .update({'status': response});
-
-      if (response == 'accepted') {
-        // Add each other as friends in Firestore
-        await FirebaseFirestore.instance.collection('friends').add({
-          'user1': currentUser.uid,
-          'user2': senderId,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Friend request accepted.")),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Friend request rejected.")),
-        );
-      }
-
-      Navigator.of(context).pop(); // Close the dialog
-    } catch (e) {
-      print("Error responding to friend request: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to respond to request.")),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Hedieaty - Friends List'),
-        actions: [IconButton(
-          icon: Icon(Icons.notifications),
-          tooltip: 'Friend Requests',
-          onPressed: _viewFriendRequests,
-        ),
+        actions: [
           IconButton(
             icon: Icon(Icons.logout),
             tooltip: 'Sign Out',
@@ -244,49 +241,50 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Search Friends',
-                border: OutlineInputBorder(),
-                suffixIcon: Icon(Icons.search),
-              ),
-              onChanged: _filterFriends,
-            ),
-          ),
-          // Friends List
-          Expanded(
-            child: ListView.builder(
-              itemCount: filteredFriends.length,
-              itemBuilder: (context, index) {
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                      vertical: 5, horizontal: 10),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage:
-                      AssetImage(filteredFriends[index]['profilePic']),
-                    ),
-                    title: Text(filteredFriends[index]['name']),
-                    subtitle: Text(filteredFriends[index]['upcomingEvents'] > 0
-                        ? 'Upcoming Events: ${filteredFriends[index]['upcomingEvents']}'
-                        : 'No Upcoming Events'),
-                    trailing: filteredFriends[index]['upcomingEvents'] > 0
-                        ? CircleAvatar(
-                      backgroundColor: Colors.red,
-                      child: Text(
-                        '${filteredFriends[index]['upcomingEvents']}',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    )
-                        : null,
-                    onTap: () {
-                      _navigateToGiftLists(filteredFriends[index]);
-                    },
-                  ),
-                );
+              onChanged: (value) {
+                setState(() {
+                  searchEmail = value;
+                });
               },
+              decoration: InputDecoration(
+                labelText: 'Enter email to search for friend',
+                border: OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(Icons.search),
+                  onPressed: _searchUserByEmail,
+                ),
+              ),
             ),
           ),
+          // Display search result or loading indicator
+          isSearching
+              ? CircularProgressIndicator()
+              : searchResult != null
+              ? Column(
+            children: [
+              Text('Found: ${searchResult!['name']}'),
+              Text('Email: ${searchResult!['email']}'),
+              ElevatedButton(
+                onPressed: _addFriend,
+                child: Text('Add Friend'),
+              ),
+            ],
+          )
+              : Text('No user found with that email.'),
+
+          // Friends List
+    // Display current friends
+    Expanded(
+      child: ListView.builder(
+        itemCount: friends.length,
+        itemBuilder: (context, index) {
+          return ListTile(
+            title: Text(friends[index]['name']),
+            subtitle: Text(friends[index]['email']),
+          );
+        },
+      ),
+      ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -391,12 +389,22 @@ class _HomePageState extends State<HomePage> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        TextEditingController friendEmailController = TextEditingController();
+        TextEditingController friendNameController = TextEditingController();
+        TextEditingController friendPhoneController = TextEditingController();
         return AlertDialog(
-          title: Text('Send Friend Request'),
-          content: TextField(
-            controller: friendEmailController,
-            decoration: InputDecoration(labelText: 'Friend\'s Email'),
+          title: Text('Add Friend'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: friendNameController,
+                decoration: InputDecoration(labelText: 'Friend\'s Name'),
+              ),
+              TextField(
+                controller: friendPhoneController,
+                decoration: InputDecoration(labelText: 'Phone Number'),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -406,56 +414,21 @@ class _HomePageState extends State<HomePage> {
               child: Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                String friendEmail = friendEmailController.text.trim();
-                await _sendFriendRequest(friendEmail);
+              onPressed: () {
+                setState(() {
+                  friends.add({
+                    'name': friendNameController.text,
+                    'profilePic': 'assets/default.jpg',
+                    'upcomingEvents': 0,
+                  });
+                });
                 Navigator.of(context).pop();
               },
-              child: Text('Send Request'),
+              child: Text('Add Friend'),
             ),
           ],
         );
       },
     );
   }
-
-  Future<void> _sendFriendRequest(String friendEmail) async {
-    try {
-      User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) throw "User not logged in.";
-
-      // Find the receiver's UID based on their email
-      QuerySnapshot userSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: friendEmail)
-          .get();
-
-      if (userSnapshot.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("User with this email not found.")),
-        );
-        return;
-      }
-
-      String receiverUid = userSnapshot.docs.first.id;
-
-      // Add the friend request to the notifications collection
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'senderId': currentUser.uid,
-        'receiverId': receiverUid,
-        'status': 'pending',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Friend request sent.")),
-      );
-    } catch (e) {
-      print("Error sending friend request: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to send friend request.")),
-      );
-    }
-  }
-
 }
