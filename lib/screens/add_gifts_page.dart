@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../local_db.dart';
 
 class AddGiftsPage extends StatefulWidget {
@@ -28,6 +29,14 @@ class _AddGiftsPageState extends State<AddGiftsPage> {
       });
 
       try {
+        // Get the currently logged-in user
+        User? currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser == null) {
+          throw Exception("No user is currently logged in.");
+        }
+
+        final userId = currentUser.uid;
+
         // Prepare gift data
         final giftData = {
           'name': _nameController.text,
@@ -35,6 +44,7 @@ class _AddGiftsPageState extends State<AddGiftsPage> {
           'category': _categoryController.text,
           'price': double.tryParse(_priceController.text) ?? 0.0,
           'status': 'available',
+          'userId': userId, // Adding user ID to Firestore
           'eventId': widget.firebaseEventId, // Firestore Event ID
         };
 
@@ -48,6 +58,8 @@ class _AddGiftsPageState extends State<AddGiftsPage> {
             'price': giftData['price'],
             'status': giftData['status'],
             'eventId': widget.eventId, // SQLite Event ID
+            'pledgerId': null, // Initially no pledger
+            'userId': userId, // Adding user ID to SQLite
           });
         }
 
@@ -58,6 +70,9 @@ class _AddGiftsPageState extends State<AddGiftsPage> {
 
         // Notify the parent page
         Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gift saved successfully!')),
+        );
       } catch (e) {
         print("Error saving gift: $e");
         ScaffoldMessenger.of(context).showSnackBar(
