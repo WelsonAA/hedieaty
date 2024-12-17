@@ -6,6 +6,7 @@ import 'start_page.dart'; // Import the StartPage
 import '../local_db.dart';
 import 'create_event_page.dart';
 import 'user_events_page.dart';
+import 'friend_gift_list_page.dart';
 class HomePage extends StatefulWidget {
   @override
   _HomePageState createState() => _HomePageState();
@@ -54,21 +55,38 @@ class _HomePageState extends State<HomePage> {
       });
     }
   }
-// Fetch friends list from Firestore
   Future<void> _fetchFriends() async {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
+        // Fetch the current user's document
         DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUser.uid)
             .get();
 
         if (userDoc.exists) {
-          List friendsList = userDoc['friends'] ?? [];
+          List<dynamic> friendsList = userDoc['friends'] ?? [];
+          List<Map<String, dynamic>> enrichedFriends = [];
+
+          // Loop through each friend to get their events count
+          for (var friend in friendsList) {
+            String friendId = friend['id'] ?? '';
+
+            // Fetch the number of events associated with the friend
+            int eventCount = await _getUpcomingEventsCount(friendId);
+
+            enrichedFriends.add({
+              'id': friendId,
+              'name': friend['name'] ?? 'Unknown',
+              'email': friend['email'] ?? 'Unknown',
+              'upcomingEvents': eventCount, // Set actual count
+            });
+          }
+
           setState(() {
-            friends = friendsList.map((friend) => {'name': friend['name'], 'email': friend['email']}).toList();
-            isLoading = false; // Stop the loading indicator
+            friends = enrichedFriends;
+            isLoading = false;
           });
         }
       }
@@ -80,7 +98,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+// Helper function to get the count of upcoming events for a friend
+  Future<int> _getUpcomingEventsCount(String friendId) async {
+    try {
+      // Query Firestore to get events created by this friend
+      QuerySnapshot eventsSnapshot = await FirebaseFirestore.instance
+          .collection('events')
+          .where('userId', isEqualTo: friendId) // Check userId of events
+          .get();
+
+      return eventsSnapshot.docs.length; // Return the number of events
+    } catch (e) {
+      print("Error fetching event count for friend $friendId: $e");
+      return 0; // Return 0 in case of error
+    }
+  }
+
+
+
+
   // Search for a user by email
+// Search for a user by email
   Future<void> _searchUserByEmail() async {
     setState(() {
       isSearching = true;
@@ -96,7 +134,12 @@ class _HomePageState extends State<HomePage> {
 
       if (querySnapshot.docs.isNotEmpty) {
         setState(() {
-          searchResult = querySnapshot.docs.first.data() as Map<String, dynamic>;
+          // Include the document ID in the search result
+          final doc = querySnapshot.docs.first;
+          searchResult = {
+            'id': doc.id, // Firestore document ID
+            ...doc.data() as Map<String, dynamic>, // Include other fields
+          };
         });
       } else {
         setState(() {
@@ -115,6 +158,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+
   // Add friend logic
   Future<void> _addFriend() async {
     try {
@@ -128,7 +172,7 @@ class _HomePageState extends State<HomePage> {
         // Add the found user to the current user's friends list
         await currentUserDocRef.update({
           'friends': FieldValue.arrayUnion([{
-            'id': searchResult!['id'],
+            'id': searchResult!['id'], // Use the correct ID
             'name': searchResult!['name'],
             'email': searchResult!['email']
           }])
@@ -162,6 +206,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+
   // Handle sign-out
   Future<void> _signOut() async {
     try {
@@ -191,6 +236,24 @@ class _HomePageState extends State<HomePage> {
           friend['name'].toLowerCase().contains(query.toLowerCase()))
           .toList();
     });
+  }
+  void _navigateToFriendGiftLists(Map<String, dynamic> friend) {
+    final friendId = friend['id'] ?? ''; // Default to an empty string
+
+    if (friendId.isEmpty) {
+      // Show a warning if friendId is missing
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to load gift list. Friend ID is missing.')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FriendGiftListPage(friendId: friendId),
+      ),
+    );
   }
 
   @override
@@ -226,13 +289,7 @@ class _HomePageState extends State<HomePage> {
               }
             },
           ),
-          IconButton(
-            icon: Icon(Icons.add),
-            tooltip: 'Add Friend',
-            onPressed: () {
-              _showAddFriendDialog();
-            },
-          ),
+
         ],
       ),
       body: Column(
@@ -278,9 +335,22 @@ class _HomePageState extends State<HomePage> {
       child: ListView.builder(
         itemCount: friends.length,
         itemBuilder: (context, index) {
-          return ListTile(
-            title: Text(friends[index]['name']),
-            subtitle: Text(friends[index]['email']),
+          final friend = friends[index];
+          return Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                child: Text(friend['name'][0]),
+              ),
+              title: Text(friend['name']),
+              subtitle: Text(
+                friend['upcomingEvents'] > 0
+                    ? 'Upcoming Events: ${friend['upcomingEvents']}'
+                    : 'No Upcoming Events',
+              ),
+              onTap: () {
+                _navigateToFriendGiftLists(friend);
+              },
+            ),
           );
         },
       ),
@@ -384,51 +454,5 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Show Add Friend Dialog
-  void _showAddFriendDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        TextEditingController friendNameController = TextEditingController();
-        TextEditingController friendPhoneController = TextEditingController();
-        return AlertDialog(
-          title: Text('Add Friend'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: friendNameController,
-                decoration: InputDecoration(labelText: 'Friend\'s Name'),
-              ),
-              TextField(
-                controller: friendPhoneController,
-                decoration: InputDecoration(labelText: 'Phone Number'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  friends.add({
-                    'name': friendNameController.text,
-                    'profilePic': 'assets/default.jpg',
-                    'upcomingEvents': 0,
-                  });
-                });
-                Navigator.of(context).pop();
-              },
-              child: Text('Add Friend'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+
 }
