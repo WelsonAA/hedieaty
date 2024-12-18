@@ -1,8 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:hedieaty/screens/login_page.dart';
 import 'package:hedieaty/local_db.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'screens/home_page.dart';
 import 'screens/start_page.dart';
 import '/services/firebase_options.dart';
@@ -10,19 +13,56 @@ import '/services/firebase_options.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Initialize Firebase if necessary
+  await Firebase.initializeApp();
+  print("Background message received: ${message.notification?.title}");
+}
+
+
+
+void _listenForTokenRefresh() {
+  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+    print("Token refreshed: $newToken");
+
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .update({'deviceToken': newToken});
+      print("Updated token in Firestore");
+    }
+  });
+}
+void _saveTokenToFirestore(String token) async {
+  User? currentUser = FirebaseAuth.instance.currentUser;
+
+  if (currentUser != null) {
+    final userRef = FirebaseFirestore.instance.collection('users').doc(currentUser.uid);
+
+    await userRef.update({
+      'deviceToken': token,
+    });
+    print("Device token saved to Firestore: $token");
+  }
+}
+
+// Initialize local notifications plugin
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
+void main() async{
+  WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  print("Handling a background message: ${message.messageId}");
-}
-void main() async{
-  // Initialize the database factory for web
-  //await local_db().getInstance();
-  print("Helloo");
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);  // Initialize Firebase
-  // Set up background message handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  const AndroidInitializationSettings initializationSettingsAndroid =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   await local_db().resetting(); // Reset the database
   await local_db().getInstance();
 
@@ -45,54 +85,59 @@ class _HedieatyAppState extends State<HedieatyApp> {
   }
 
   void _initializeFirebaseMessaging() async {
-    // Request notification permissions
+    // Request permissions
     NotificationSettings settings = await _messaging.requestPermission(
       alert: true,
-      announcement: false,
       badge: true,
-      carPlay: false,
-      criticalAlert: false,
-      provisional: false,
       sound: true,
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       print('User granted permission');
-    } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-      print('User granted provisional permission');
     } else {
-      print('User declined or has not accepted permission');
+      print('User denied notification permissions');
     }
 
-    // Get the device token
+    // Retrieve and save device token
     String? token = await _messaging.getToken();
     print("Device Token: $token");
+    _saveTokenToFirestore(token!);
 
-    // Listen to foreground notifications
+    // Listen for foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print("Foreground message received: ${message.notification?.title}");
-      _showNotification(message);
+      _showNotification(
+        title: message.notification?.title ?? "Notification",
+        body: message.notification?.body ?? "You have a new message.",
+      );
     });
 
-    // Handle notification tap events
+    // Listen for background messages when app is opened
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print("Notification opened from background: ${message.notification?.title}");
+      print("Notification opened: ${message.notification?.title}");
     });
   }
 
-  void _showNotification(RemoteMessage message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(message.notification?.title ?? "Notification"),
-        content: Text(message.notification?.body ?? "You have a new message."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('OK'),
-          ),
-        ],
-      ),
+
+  void _showNotification({required String title, required String body}) {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+    AndroidNotificationDetails(
+      'high_importance_channel', // Channel ID
+      'High Importance Notifications', // Channel name
+      channelDescription: 'This channel is used for important notifications.',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    const NotificationDetails platformChannelSpecifics =
+    NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    flutterLocalNotificationsPlugin.show(
+      0, // Notification ID
+      title,
+      body,
+      platformChannelSpecifics,
     );
   }
 

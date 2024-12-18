@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +11,20 @@ import 'friend_gift_list_page.dart';
 class HomePage extends StatefulWidget {
   @override
   _HomePageState createState() => _HomePageState();
+}
+void _removeTokenFromFirestore() async {
+  String? token = await FirebaseMessaging.instance.getToken();
+  User? currentUser = FirebaseAuth.instance.currentUser;
+
+  if (currentUser != null && token != null) {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .update({
+      'deviceTokens': FieldValue.arrayRemove([token])
+    });
+    print("Token removed from Firestore");
+  }
 }
 
 class _HomePageState extends State<HomePage> {
@@ -211,6 +226,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _signOut() async {
     try {
       await FirebaseAuth.instance.signOut(); // Sign out from Firebase
+      _removeTokenFromFirestore();
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => StartPage()),

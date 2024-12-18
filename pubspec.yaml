@@ -44,7 +44,8 @@ dependencies:
   intl: ^0.20.1
   firebase_auth: ^5.3.3
   firebase_messaging: ^15.1.6
-
+  googleapis_auth: ^1.6.0
+  flutter_local_notifications: ^18.0.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -67,6 +68,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  assets:
+    - assets/hedieaty-3314d-ecae65072600.json
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

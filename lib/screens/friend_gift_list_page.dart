@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../local_db.dart';
+import '../notifications_manager.dart';
 
 class FriendGiftListPage extends StatefulWidget {
   final String friendId;
@@ -22,25 +25,21 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
     _fetchGiftLists();
   }
 
-  // Fetch gifts for the selected friend
   Future<void> _fetchGiftLists() async {
     try {
       final db = await local_db().getInstance();
 
-      // Fetch gifts from Firestore
       QuerySnapshot giftsSnap = await FirebaseFirestore.instance
           .collection('gifts')
           .where('userId', isEqualTo: widget.friendId)
           .get();
 
-      // Fetch gifts from local SQLite
       List<Map<String, dynamic>> localGifts = await db!.query(
         'Gifts',
         where: 'eventId = ?',
         whereArgs: [widget.friendId],
       );
 
-      // Combine results
       setState(() {
         giftLists = giftsSnap.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
@@ -50,7 +49,7 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
             'description': data['description'] ?? '',
             'category': data['category'] ?? '',
             'status': data['status'] ?? 'available',
-            'pledgerId': data['pledgerId'] ?? null, // Check for pledgerId
+            'pledgerId': data['pledgerId'] ?? null,
             'source': 'Firestore',
           };
         }).toList();
@@ -77,26 +76,38 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
     }
   }
 
-  // Report purchased
-  Future<void> _reportPurchased(String giftId, String source) async {
-    await _updateGiftStatus(giftId, source, 'purchased');
-  }
-
-  // Unpledge a gift
-  Future<void> _unpledgeGift(String giftId, String source) async {
-    await _updateGiftStatus(giftId, source, 'available');
-  }
-
-  // Update gift status in both Firestore and SQLite
   Future<void> _updateGiftStatus(String giftId, String source, String newStatus) async {
     try {
       final db = await local_db().getInstance();
+      User? currentUser = FirebaseAuth.instance.currentUser;
+
+      // Fetch the gift details
+      String? ownerId;
+      String? giftName;
+      if (source == 'Firestore') {
+        DocumentSnapshot giftDoc = await FirebaseFirestore.instance.collection('gifts').doc(giftId).get();
+        ownerId = giftDoc['userId'];
+        giftName = giftDoc['name'];
+      } else {
+        List<Map<String, dynamic>> giftData = await db!.query(
+          'Gifts',
+          where: 'id = ?',
+          whereArgs: [giftId],
+        );
+        if (giftData.isNotEmpty) {
+          ownerId = giftData.first['userId'];
+          giftName = giftData.first['name'];
+        }
+      }
+
+      if (ownerId == null || currentUser == null)
+        return;
 
       // Update Firestore
       if (source == 'Firestore') {
         await FirebaseFirestore.instance.collection('gifts').doc(giftId).update({
           'status': newStatus,
-          'pledgerId': newStatus == 'available' ? null : FirebaseAuth.instance.currentUser!.uid,
+          'pledgerId': newStatus == 'available' ? null : currentUser.uid,
         });
       }
 
@@ -105,14 +116,38 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
         'Gifts',
         {
           'status': newStatus,
-          'pledgerId': newStatus == 'available' ? null : FirebaseAuth.instance.currentUser!.uid,
+          'pledgerId': newStatus == 'available' ? null : currentUser.uid,
         },
         where: 'id = ?',
         whereArgs: [giftId],
       );
 
+      // Fetch owner's device token
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(ownerId).get();
+      if (userDoc.exists && userDoc['deviceToken'] != null) {
+        String deviceToken = userDoc['deviceToken'];
+
+        // Prepare notification details
+        String action = newStatus == 'pledged'
+            ? 'pledged'
+            : newStatus == 'purchased'
+            ? 'purchased'
+            : 'unpledged';
+
+        String notificationTitle = "Your gift was $action";
+        String notificationBody = "${currentUser.displayName ?? 'A friend'} has $action your gift: $giftName";
+
+        // Send the notification using FCMService
+        await FCMService.sendNotification(
+          token: deviceToken,
+          title: notificationTitle,
+          body: notificationBody,
+          data: {"giftId": giftId, "action": action},
+        );
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(newStatus == 'purchased' ? 'Gift marked as purchased!' : 'Gift unpledged!')),
+        SnackBar(content: Text(newStatus == 'purchased' ? 'Gift marked as purchased!' : 'Gift updated successfully!')),
       );
 
       _fetchGiftLists();
@@ -121,6 +156,53 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
     }
   }
 
+
+  Future<void> _sendNotificationToUser(String userId, {required String title, required String body}) async {
+    try {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      if (userDoc.exists && userDoc['deviceToken'] != null) {
+        String deviceToken = userDoc['deviceToken'];
+
+        final payload = {
+          "to": deviceToken,
+          "notification": {
+            "title": title,
+            "body": body,
+          },
+          "data": {
+            "action": "gift_update",
+            "userId": userId,
+          },
+        };
+
+        final response = await http.post(
+          Uri.parse('https://fcm.googleapis.com/fcm/send'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'key=YOUR_SERVER_KEY',
+          },
+          body: jsonEncode(payload),
+        );
+
+        if (response.statusCode == 200) {
+          print("Notification sent successfully: $title - $body");
+        } else {
+          print("Error sending notification: ${response.body}");
+        }
+      }
+    } catch (e) {
+      print("Error sending notification: $e");
+    }
+  }
+// Report purchased
+  Future<void> _reportPurchased(String giftId, String source) async {
+    await _updateGiftStatus(giftId, source, 'purchased');
+  }
+
+  // Unpledge a gift
+  Future<void> _unpledgeGift(String giftId, String source) async {
+    await _updateGiftStatus(giftId, source, 'available');
+  }
   // Determine color based on gift status
   Color _getGiftColor(String status) {
     switch (status) {
