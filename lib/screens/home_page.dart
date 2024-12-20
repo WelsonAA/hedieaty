@@ -2,7 +2,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'user_profile_page.dart';
 import 'package:hedieaty/services/firebase_auth_service.dart';
+import 'my_pledged_gifts_page.dart';
 import 'start_page.dart'; // Import the StartPage
 import '../local_db.dart';
 import 'create_event_page.dart';
@@ -276,7 +278,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Hedieaty - Friends List'),
+        title: Text('Home Page'),
         actions: [
           IconButton(
             icon: Icon(Icons.logout),
@@ -295,6 +297,39 @@ class _HomePageState extends State<HomePage> {
                     builder: (context) => UserEventsPage(
                       userId: identifiers['loggedInUserId'], // SQLite User ID
                       firebaseUserUid: identifiers['firebaseUserUid'], // Firebase UID
+                    ),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Unable to fetch user details. Please try again.')),
+                );
+              }
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.card_giftcard),
+            tooltip: 'My Pledged Gifts',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MyPledgedGiftsPage(), // Navigate to MyPledgedGiftsPage
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.person),
+            tooltip: 'User Profile',
+            onPressed: () async {
+              Map<String, dynamic>? identifiers = await getUserIdentifiers();
+              if (identifiers != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UserProfilePage(
+                      firebaseUserUid: identifiers['firebaseUserUid'], // Correct parameter name
                     ),
                   ),
                 );

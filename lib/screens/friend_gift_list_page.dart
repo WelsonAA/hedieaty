@@ -100,8 +100,7 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
         }
       }
 
-      if (ownerId == null || currentUser == null)
-        return;
+      if (ownerId == null || currentUser == null) return;
 
       // Update Firestore
       if (source == 'Firestore') {
@@ -124,26 +123,32 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
 
       // Fetch owner's device token
       DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(ownerId).get();
-      if (userDoc.exists && userDoc['deviceToken'] != null) {
-        String deviceToken = userDoc['deviceToken'];
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
 
-        // Prepare notification details
-        String action = newStatus == 'pledged'
-            ? 'pledged'
-            : newStatus == 'purchased'
-            ? 'purchased'
-            : 'unpledged';
+        if (userData.containsKey('deviceToken') && userData['deviceToken'] != null) {
+          String deviceToken = userData['deviceToken'];
 
-        String notificationTitle = "Your gift was $action";
-        String notificationBody = "${currentUser.displayName ?? 'A friend'} has $action your gift: $giftName";
+          // Prepare notification details
+          String action = newStatus == 'pledged'
+              ? 'pledged'
+              : newStatus == 'purchased'
+              ? 'purchased'
+              : 'unpledged';
 
-        // Send the notification using FCMService
-        await FCMService.sendNotification(
-          token: deviceToken,
-          title: notificationTitle,
-          body: notificationBody,
-          data: {"giftId": giftId, "action": action},
-        );
+          String notificationTitle = "Your gift was $action";
+          String notificationBody = "${currentUser.displayName ?? 'A friend'} has $action your gift: $giftName";
+
+          // Send the notification using FCMService
+          await FCMService.sendNotification(
+            token: deviceToken,
+            title: notificationTitle,
+            body: notificationBody,
+            data: {"giftId": giftId, "action": action},
+          );
+        } else {
+          print("Notifications are disabled for this user.");
+        }
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -155,6 +160,7 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
       print("Error updating gift status: $e");
     }
   }
+
 
 
   Future<void> _sendNotificationToUser(String userId, {required String title, required String body}) async {
