@@ -8,7 +8,8 @@ import 'user_profile_edit_page.dart';
 class UserProfilePage extends StatefulWidget {
   final String firebaseUserUid;
 
-  UserProfilePage({required this.firebaseUserUid});
+  final Key? key; // Add this line
+  UserProfilePage({required this.firebaseUserUid,this.key}) : super(key: key);
 
   @override
   _UserProfilePageState createState() => _UserProfilePageState();

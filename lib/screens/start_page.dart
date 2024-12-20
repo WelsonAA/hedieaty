@@ -3,6 +3,9 @@ import 'login_page.dart';
 import 'signup_page.dart';
 import '../local_db.dart';
 class StartPage extends StatelessWidget {
+  final Key? key; // Add this line
+
+  StartPage({this.key}) : super(key: key); // Pass the key to the superclass
   @override
   Widget build(BuildContext context) {
     local_db().getInstance();
@@ -26,7 +29,7 @@ class StartPage extends StatelessWidget {
             SizedBox(height: 30),
 
             // Login button
-            ElevatedButton(
+            ElevatedButton(key: Key('LoginButton'),
               onPressed: () {
                 Navigator.push(
                   context,

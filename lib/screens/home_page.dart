@@ -12,6 +12,9 @@ import 'create_event_page.dart';
 import 'user_events_page.dart';
 import 'friend_gift_list_page.dart';
 class HomePage extends StatefulWidget {
+  final Key? key; // Add this line
+
+  HomePage({this.key}) : super(key: key); // Pass the key to the superclass
   @override
   _HomePageState createState() => _HomePageState();
 }
@@ -379,14 +382,17 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        key: Key('HomePage_AppBar'), // Key for AppBar
         title: Text('Home Page'),
         actions: [
           IconButton(
+            key: Key('HomePage_SignOutButton'), // Key for Sign Out button
             icon: Icon(Icons.logout),
             tooltip: 'Sign Out',
             onPressed: _signOut,
           ),
           IconButton(
+            key: Key('HomePage_ViewEventsButton'), // Key for View Events button
             icon: Icon(Icons.event),
             tooltip: 'View My Events',
             onPressed: () async {
@@ -396,6 +402,7 @@ class _HomePageState extends State<HomePage> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => UserEventsPage(
+                      key: Key('UserEventsPage'), // Key for UserEventsPage
                       userId: identifiers['loggedInUserId'], // SQLite User ID
                       firebaseUserUid: identifiers['firebaseUserUid'], // Firebase UID
                     ),
@@ -409,18 +416,22 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           IconButton(
+            key: Key('HomePage_MyPledgedGiftsButton'), // Key for My Pledged Gifts button
             icon: Icon(Icons.card_giftcard),
             tooltip: 'My Pledged Gifts',
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => MyPledgedGiftsPage(), // Navigate to MyPledgedGiftsPage
+                  builder: (context) => MyPledgedGiftsPage(
+                    key: Key('MyPledgedGiftsPage'), // Key for MyPledgedGiftsPage
+                  ),
                 ),
               );
             },
           ),
           IconButton(
+            key: Key('HomePage_UserProfileButton'), // Key for User Profile button
             icon: Icon(Icons.person),
             tooltip: 'User Profile',
             onPressed: () async {
@@ -430,6 +441,7 @@ class _HomePageState extends State<HomePage> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => UserProfilePage(
+                      key: Key('UserProfilePage'), // Key for UserProfilePage
                       firebaseUserUid: identifiers['firebaseUserUid'], // Correct parameter name
                     ),
                   ),
@@ -441,15 +453,17 @@ class _HomePageState extends State<HomePage> {
               }
             },
           ),
-
         ],
       ),
       body: Column(
+        key: Key('HomePage_Body'), // Key for the body column
         children: [
           // Search Bar
           Padding(
+            key: Key('HomePage_SearchBarPadding'), // Key for Search Bar Padding
             padding: const EdgeInsets.all(8.0),
             child: TextField(
+              key: Key('HomePage_SearchBar'), // Key for Search Bar
               onChanged: (value) {
                 setState(() {
                   searchEmail = value;
@@ -459,6 +473,7 @@ class _HomePageState extends State<HomePage> {
                 labelText: 'Enter email to search for friend',
                 border: OutlineInputBorder(),
                 suffixIcon: IconButton(
+                  key: Key('HomePage_SearchButton'), // Key for Search Button
                   icon: Icon(Icons.search),
                   onPressed: _searchUserByEmail,
                 ),
@@ -467,78 +482,96 @@ class _HomePageState extends State<HomePage> {
           ),
           // Display search result or loading indicator
           isSearching
-              ? CircularProgressIndicator()
+              ? CircularProgressIndicator(
+            key: Key('HomePage_SearchLoadingIndicator'), // Key for Loading Indicator
+          )
               : searchResult != null
               ? Column(
+            key: Key('HomePage_SearchResultColumn'), // Key for Search Result Column
             children: [
-              Text('Found: ${searchResult!['name']}'),
-              Text('Email: ${searchResult!['email']}'),
+              Text(
+                key: Key('HomePage_SearchResultName'), // Key for Search Result Name
+                'Found: ${searchResult!['name']}',
+              ),
+              Text(
+                key: Key('HomePage_SearchResultEmail'), // Key for Search Result Email
+                'Email: ${searchResult!['email']}',
+              ),
               ElevatedButton(
+                key: Key('HomePage_AddFriendButton'), // Key for Add Friend Button
                 onPressed: _addFriend,
                 child: Text('Add Friend'),
               ),
             ],
           )
-              : Text('No user found with that email.'),
-
+              : Text(
+            key: Key('HomePage_NoUserFoundText'), // Key for No User Found Text
+            'No user found with that email.',
+          ),
           // Friends List
-    // Display current friends
-    Expanded(
-      child: ListView.builder(
-        itemCount: friends.length,
-        itemBuilder: (context, index) {
-          final friend = friends[index];
-          return Card(
-            child: ListTile(
-              leading: CircleAvatar(
-                child: Text(friend['name'][0]),
-              ),
-              title: Text(friend['name']),
-              subtitle: Text(
-                friend['upcomingEvents'] > 0
-                    ? 'Upcoming Events: ${friend['upcomingEvents']}'
-                    : 'No Upcoming Events',
-              ),
-              onTap: () {
-                _navigateToFriendGiftLists(friend);
+          Expanded(
+            key: Key('HomePage_FriendsListExpanded'), // Key for Friends List Expanded
+            child: ListView.builder(
+              key: Key('HomePage_FriendsList'), // Key for Friends List
+              itemCount: friends.length,
+              itemBuilder: (context, index) {
+                final friend = friends[index];
+                return Card(
+                  key: Key('HomePage_FriendCard_$index'), // Key for each Friend Card
+                  child: ListTile(
+                    key: Key('HomePage_FriendTile_$index'), // Key for each Friend Tile
+                    leading: CircleAvatar(
+                      key: Key('HomePage_FriendAvatar_$index'), // Key for Friend Avatar
+                      child: Text(friend['name'][0]),
+                    ),
+                    title: Text(
+                      key: Key('HomePage_FriendName_$index'), // Key for Friend Name
+                      friend['name'],
+                    ),
+                    subtitle: Text(
+                      key: Key('HomePage_FriendUpcomingEvents_$index'), // Key for Friend Upcoming Events
+                      friend['upcomingEvents'] > 0
+                          ? 'Upcoming Events: ${friend['upcomingEvents']}'
+                          : 'No Upcoming Events',
+                    ),
+                    onTap: () {
+                      _navigateToFriendGiftLists(friend);
+                    },
+                  ),
+                );
               },
             ),
-          );
-        },
-      ),
-      ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        key: Key('HomePage_CreateEventButton'), // Key for Create Event Button
         onPressed: () async {
           Map<String, dynamic>? identifiers = await getUserIdentifiers();
           if (identifiers != null) {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) =>
-                    CreateEventPage(
-                      userId: identifiers['loggedInUserId'], // SQLite User ID
-                      firebaseUserId: identifiers['firebaseUserUid'], // Firebase UID
-                    ),
+                builder: (context) => CreateEventPage(
+                  key: Key('CreateEventPage'), // Key for CreateEventPage
+                  userId: identifiers['loggedInUserId'], // SQLite User ID
+                  firebaseUserId: identifiers['firebaseUserUid'], // Firebase UID
+                ),
               ),
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(
-                  'Unable to fetch user details. Please try again.')),
+              SnackBar(content: Text('Unable to fetch user details. Please try again.')),
             );
           }
         },
         label: Text('Create Event'),
         icon: Icon(Icons.create),
-
       ),
-
-
-
     );
   }
+
+
 
   Future<Map<String, dynamic>?> getUserIdentifiers() async {
     User? firebaseUser = FirebaseAuth.instance.currentUser;

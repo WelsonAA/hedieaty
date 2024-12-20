@@ -3,6 +3,10 @@ import '../services/firebase_auth_service.dart';
 import 'login_page.dart';
 
 class SignUpPage extends StatefulWidget {
+  final Key? key; // Add this line
+
+  SignUpPage({this.key}) : super(key: key); // Pass the key to the superclass
+
   @override
   _SignUpPageState createState() => _SignUpPageState();
 }

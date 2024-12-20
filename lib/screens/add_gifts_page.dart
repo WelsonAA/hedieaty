@@ -65,19 +65,25 @@ class _AddGiftsPageState extends State<AddGiftsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        key: Key('AddGiftsPage_AppBar'), // Key for AppBar
         title: Text('Add Gift'),
       ),
       body: isSaving
-          ? Center(child: CircularProgressIndicator())
+          ? Center(
+        key: Key('AddGiftsPage_LoadingIndicator'), // Key for Loading Indicator
+        child: CircularProgressIndicator(),
+      )
           : Padding(
+        key: Key('AddGiftsPage_BodyPadding'), // Key for Body Padding
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(
+            key: Key('AddGiftsPage_FormColumn'), // Key for Form Column
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextFormField(
-                controller: _nameController,
+                key: Key('AddGiftsPage_GiftNameField'), // Key for Gift Name Field
                 decoration: InputDecoration(labelText: 'Gift Name'),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
@@ -87,15 +93,15 @@ class _AddGiftsPageState extends State<AddGiftsPage> {
                 },
               ),
               TextFormField(
-                controller: _descriptionController,
+                key: Key('AddGiftsPage_DescriptionField'), // Key for Description Field
                 decoration: InputDecoration(labelText: 'Description'),
               ),
               TextFormField(
-                controller: _categoryController,
+                key: Key('AddGiftsPage_CategoryField'), // Key for Category Field
                 decoration: InputDecoration(labelText: 'Category'),
               ),
               TextFormField(
-                controller: _priceController,
+                key: Key('AddGiftsPage_PriceField'), // Key for Price Field
                 decoration: InputDecoration(labelText: 'Price'),
                 keyboardType: TextInputType.number,
                 validator: (value) {
@@ -109,6 +115,7 @@ class _AddGiftsPageState extends State<AddGiftsPage> {
               ),
               SizedBox(height: 20),
               ElevatedButton(
+                key: Key('AddGiftsPage_SaveButton'), // Key for Save Button
                 onPressed: _saveGiftLocally,
                 child: Text('Save Locally'),
               ),
@@ -118,4 +125,6 @@ class _AddGiftsPageState extends State<AddGiftsPage> {
       ),
     );
   }
+
+
 }

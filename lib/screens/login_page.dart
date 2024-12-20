@@ -5,6 +5,10 @@ import '../local_db.dart';
 import 'signup_page.dart';
 import 'home_page.dart';
 class LoginPage extends StatefulWidget {
+  final Key? key; // Add this line
+
+  LoginPage({this.key}) : super(key: key); // Pass the key to the superclass
+
   @override
   _LoginPageState createState() => _LoginPageState();
 }
@@ -174,7 +178,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -187,26 +190,30 @@ class _LoginPageState extends State<LoginPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(
+              key: Key('LoginPage_EmailField'), // Key for email field
               controller: _emailController,
               decoration: InputDecoration(labelText: 'Email'),
             ),
             TextField(
+              key: Key('LoginPage_PasswordField'), // Key for password field
               controller: _passwordController,
               decoration: InputDecoration(labelText: 'Password'),
               obscureText: true,
             ),
             SizedBox(height: 20),
             ElevatedButton(
+              key: Key('LoginPage_LoginButton'), // Key for login button
               onPressed: _login,
               child: Text('Login'),
             ),
             SizedBox(height: 20),
             TextButton(
+              key: Key('LoginPage_SignUpButton'), // Key for signup button
               onPressed: () {
                 // Navigate to signup screen
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => SignUpPage()),
+                  MaterialPageRoute(builder: (context) => SignUpPage(key: Key('SignUpPage'))),
                 );
               },
               child: Text('Don\'t have an account? Sign up'),
@@ -216,4 +223,5 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+
 }

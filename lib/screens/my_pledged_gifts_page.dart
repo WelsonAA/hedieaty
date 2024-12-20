@@ -5,6 +5,9 @@ import '../local_db.dart';
 import '../notifications_manager.dart';
 
 class MyPledgedGiftsPage extends StatefulWidget {
+  final Key? key; // Add this line
+
+  MyPledgedGiftsPage({this.key}) : super(key: key);
   @override
   _MyPledgedGiftsPageState createState() => _MyPledgedGiftsPageState();
 }

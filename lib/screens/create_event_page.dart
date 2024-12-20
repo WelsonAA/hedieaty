@@ -6,8 +6,8 @@ import 'package:intl/intl.dart'; // For formatting dates
 class CreateEventPage extends StatefulWidget {
   final int userId; // Pass the current user ID for local DB association
   final String firebaseUserId; // Pass the Firebase User ID for Firestore association
-
-  CreateEventPage({required this.userId, required this.firebaseUserId});
+  final Key? key; // Add this line
+  CreateEventPage({required this.userId, required this.firebaseUserId, this.key}):super(key:key);
 
   @override
   _CreateEventPageState createState() => _CreateEventPageState();
@@ -62,14 +62,20 @@ class _CreateEventPageState extends State<CreateEventPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Create Event')),
+      appBar: AppBar(
+        key: Key('CreateEventPage_AppBar'), // Key for AppBar
+        title: Text('Create Event'),
+      ),
       body: Padding(
+        key: Key('CreateEventPage_BodyPadding'), // Key for the Body Padding
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(
+            key: Key('CreateEventPage_FormColumn'), // Key for the Form Column
             children: [
               TextFormField(
+                key: Key('CreateEventPage_EventNameField'), // Key for Event Name Field
                 controller: _nameController,
                 decoration: InputDecoration(labelText: 'Event Name'),
                 validator: (value) {
@@ -80,6 +86,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 },
               ),
               TextFormField(
+                key: Key('CreateEventPage_EventDateField'), // Key for Event Date Field
                 controller: _dateController,
                 decoration: InputDecoration(labelText: 'Event Date'),
                 readOnly: true,
@@ -105,16 +112,19 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 },
               ),
               TextFormField(
+                key: Key('CreateEventPage_EventLocationField'), // Key for Event Location Field
                 controller: _locationController,
                 decoration: InputDecoration(labelText: 'Event Location'),
               ),
               TextFormField(
+                key: Key('CreateEventPage_EventDescriptionField'), // Key for Event Description Field
                 controller: _descriptionController,
                 decoration: InputDecoration(labelText: 'Event Description'),
                 maxLines: 3,
               ),
               SizedBox(height: 20),
               ElevatedButton(
+                key: Key('CreateEventPage_SaveEventButton'), // Key for Save Event Button
                 onPressed: _saveEvent,
                 child: Text('Save Event'),
               ),
@@ -124,4 +134,5 @@ class _CreateEventPageState extends State<CreateEventPage> {
       ),
     );
   }
+
 }

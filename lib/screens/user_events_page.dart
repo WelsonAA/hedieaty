@@ -9,8 +9,8 @@ import 'edit_event_page.dart';
 class UserEventsPage extends StatefulWidget {
   final int userId; // Local SQLite user ID
   final String firebaseUserUid; // Firebase UID
-
-  UserEventsPage({required this.userId, required this.firebaseUserUid});
+  final Key? key; // Add this line
+  UserEventsPage({required this.userId, required this.firebaseUserUid, this.key}): super(key: key);
 
   @override
   _UserEventsPageState createState() => _UserEventsPageState();

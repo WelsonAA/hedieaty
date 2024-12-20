@@ -140,11 +140,10 @@ class _HedieatyAppState extends State<HedieatyApp> {
       platformChannelSpecifics,
     );
   }
-
   @override
   Widget build(BuildContext context) {
-    // Only retain this single MaterialApp definition
     return MaterialApp(
+      key: Key('MaterialApp_Main'), // Key for the MaterialApp
       title: 'Hedieaty',
       theme: ThemeData(
         primarySwatch: Colors.purple,
@@ -152,11 +151,12 @@ class _HedieatyAppState extends State<HedieatyApp> {
       ),
       initialRoute: '/start',
       routes: {
-        '/start': (context) => StartPage(),
-        '/home': (context) => HomePage(),
-        '/login': (context) => LoginPage(),
+        '/start': (context) => StartPage(key: Key('StartPage')), // Key for StartPage
+        '/home': (context) => HomePage(key: Key('HomePage')),   // Key for HomePage
+        '/login': (context) => LoginPage(key: Key('LoginPage')), // Key for LoginPage
       },
       debugShowCheckedModeBanner: true,
     );
   }
+
 }
