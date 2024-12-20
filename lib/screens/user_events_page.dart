@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../local_db.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_gifts_page.dart';
+import 'create_event_page.dart';
 import 'event_details_page.dart';
 import 'edit_event_page.dart';
 
@@ -18,7 +19,7 @@ class UserEventsPage extends StatefulWidget {
 class _UserEventsPageState extends State<UserEventsPage> {
   List<Map<String, dynamic>> userEvents = [];
   bool isLoading = true; // Loading indicator
-
+  String selectedSortOption = 'Name Ascending'; // Default sorting option
   @override
   void initState() {
     super.initState();
@@ -27,8 +28,9 @@ class _UserEventsPageState extends State<UserEventsPage> {
 
   Future<void> _fetchUserEvents() async {
     try {
-      // Fetch events from SQLite
       final db = await local_db().getInstance();
+
+      // Fetch events from SQLite
       List<Map<String, dynamic>> localEvents = await db!.query(
         'Events',
         where: 'userId = ?',
@@ -52,25 +54,57 @@ class _UserEventsPageState extends State<UserEventsPage> {
         };
       }).toList();
 
-      // Combine events from both sources
-      setState(() {
-        userEvents = [
-          ...localEvents.map((event) => {
+      // Combine events and avoid duplication
+      Map<String, Map<String, dynamic>> uniqueEvents = {};
+
+      // Add Firestore events to the map first
+      for (var event in firestoreEventsList) {
+        final eventKey = '${event['name']}-${event['date']}';
+        uniqueEvents[eventKey] = event;
+      }
+
+      // Add local events to the map, keeping the Firestore events but adding the local event ID
+      for (var event in localEvents) {
+        final eventKey = '${event['name']}-${event['date']}';
+        if (uniqueEvents.containsKey(eventKey)) {
+          // If already exists in Firestore, keep it but add the local ID
+          uniqueEvents[eventKey]!['localEventId'] = event['id'];
+        } else {
+          // Otherwise, add the local event
+          uniqueEvents[eventKey] = {
             ...event,
-            'source': 'SQLite', // Indicate the source
-          }),
-          ...firestoreEventsList,
-        ];
+            'source': 'SQLite',
+            'localEventId': event['id'],
+          };
+        }
+      }
+
+      // Convert the map back to a list
+      setState(() {
+        userEvents = uniqueEvents.values.toList();
         isLoading = false; // Disable loading indicator
       });
     } catch (e) {
       print("Error fetching events: $e");
       setState(() {
-        isLoading = false; // Disable loading indicator on error
+        isLoading = false;
       });
     }
   }
 
+  void _sortEvents() {
+    setState(() {
+      if (selectedSortOption == 'Name Ascending') {
+        userEvents.sort((a, b) => a['name'].compareTo(b['name']));
+      } else if (selectedSortOption == 'Name Descending') {
+        userEvents.sort((a, b) => b['name'].compareTo(a['name']));
+      } else if (selectedSortOption == 'Date Ascending') {
+        userEvents.sort((a, b) => DateTime.parse(a['date']).compareTo(DateTime.parse(b['date'])));
+      } else if (selectedSortOption == 'Date Descending') {
+        userEvents.sort((a, b) => DateTime.parse(b['date']).compareTo(DateTime.parse(a['date'])));
+      }
+    });
+  }
   Future<void> _editEvent(Map<String, dynamic> event) async {
     final int? localEventId = event['source'] == 'SQLite' ? event['id'] as int : null;
     final String? firebaseEventId =
@@ -151,6 +185,30 @@ class _UserEventsPageState extends State<UserEventsPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('My Events'),
+        actions: [
+          DropdownButton<String>(
+            value: selectedSortOption,
+            onChanged: (String? newValue) {
+              if (newValue != null) {
+                setState(() {
+                  selectedSortOption = newValue;
+                  _sortEvents(); // Apply sorting when option changes
+                });
+              }
+            },
+            items: <String>[
+              'Name Ascending',
+              'Name Descending',
+              'Date Ascending',
+              'Date Descending'
+            ].map<DropdownMenuItem<String>>((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
+          ),
+        ],
       ),
       body: isLoading
           ? Center(child: CircularProgressIndicator()) // Show loader while fetching data
@@ -193,13 +251,31 @@ class _UserEventsPageState extends State<UserEventsPage> {
             ),
           );
         },
+
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreateEventPage(
+                userId: widget.userId,
+                firebaseUserId: widget.firebaseUserUid,
+              ),
+            ),
+          ).then((_) {
+            // Refresh events after creating a new one
+            _fetchUserEvents();
+          });
+        },
+        label: Text('Create Event'),
+        icon: Icon(Icons.add),
       ),
     );
   }
 
   void _navigateToEventDetails(Map<String, dynamic> event) {
-    final int? localEventId =
-    event['source'] == 'SQLite' ? event['id'] as int : null;
+    final int? localEventId = event['localEventId']; // Use deduplicated ID
     final String? firebaseEventId =
     event['source'] == 'Firestore' ? event['id'] as String : null;
 

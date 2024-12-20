@@ -2,6 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sqflite/sqflite.dart';
 import 'user_profile_page.dart';
 import 'package:hedieaty/services/firebase_auth_service.dart';
 import 'my_pledged_gifts_page.dart';
@@ -40,8 +41,108 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _syncUserData(); // Sync user data from Firestore to local DB
     _fetchUserName(); // Fetch the logged-in user's name
     _fetchFriends(); // Fetch friends from Firestore
+  }
+  Future<void> _syncUserData() async {
+    try {
+      final db = await local_db().getInstance();
+      User? currentUser = FirebaseAuth.instance.currentUser;
+
+      if (currentUser == null) {
+        print("No user logged in.");
+        return;
+      }
+
+      // Fetch user information from Firestore
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        print("User document not found in Firestore.");
+        return;
+      }
+
+      final userData = userDoc.data() as Map<String, dynamic>;
+
+      // Insert or update user in local DB
+      await db!.insert(
+        'Accounts',
+        {
+          'name': userData['name'] ?? 'Unknown User',
+          'email': currentUser.email ?? 'Unknown Email',
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace, // Handle duplicates
+      );
+
+      // Get local user ID
+      final List<Map<String, dynamic>> localUsers = await db.query(
+        'Accounts',
+        where: 'email = ?',
+        whereArgs: [currentUser.email],
+      );
+
+      if (localUsers.isEmpty) {
+        print("Failed to find the user in the local database.");
+        return;
+      }
+
+      final localUserId = localUsers.first['id'];
+
+      // Fetch events from Firestore
+      QuerySnapshot eventDocs = await FirebaseFirestore.instance
+          .collection('events')
+          .where('userId', isEqualTo: currentUser.uid)
+          .get();
+
+      for (var eventDoc in eventDocs.docs) {
+        final eventData = eventDoc.data() as Map<String, dynamic>;
+
+        await db.insert(
+          'Events',
+          {
+            'name': eventData['name'] ?? 'Unknown Event',
+            'date': eventData['date'] ?? '1970-01-01T00:00:00Z',
+            'location': eventData['location'] ?? '',
+            'description': eventData['description'] ?? '',
+            'userId': localUserId,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      // Fetch gifts from Firestore
+      QuerySnapshot giftDocs = await FirebaseFirestore.instance
+          .collection('gifts')
+          .where('userId', isEqualTo: currentUser.uid)
+          .get();
+
+      for (var giftDoc in giftDocs.docs) {
+        final giftData = giftDoc.data() as Map<String, dynamic>;
+
+        await db.insert(
+          'Gifts',
+          {
+            'name': giftData['name'] ?? 'Unknown Gift',
+            'description': giftData['description'] ?? '',
+            'category': giftData['category'] ?? '',
+            'price': giftData['price'] ?? 0.0,
+            'status': giftData['status'] ?? 'available',
+            'eventId': giftData['eventId'] ?? null,
+            'pledgerId': giftData['pledgerId'] ?? null,
+            'image': giftData['image'] ?? '',
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      print("User data synced successfully.");
+    } catch (e) {
+      print("Error syncing user data: $e");
+    }
   }
 
   // Fetch the logged-in user's name from Firestore
@@ -429,7 +530,7 @@ class _HomePageState extends State<HomePage> {
             );
           }
         },
-        label: Text('Create Event/List'),
+        label: Text('Create Event'),
         icon: Icon(Icons.create),
 
       ),
