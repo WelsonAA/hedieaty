@@ -19,7 +19,7 @@ Hedieaty is a comprehensive gift management platform designed to make organizing
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/hedieaty.git
+   git clone https://github.com/WelsonAA/hedieaty.git
    ```
 2. Navigate to the project directory:
    ```bash
